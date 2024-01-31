@@ -39,7 +39,6 @@ cookie_dialog_button.click()
 driver.execute_script("document.body.style.zoom='10%'")
 
 time.sleep(13) 
-1+1
 
 def extract_car_data(car_div):
     # Extraire les données de chaque voiture
