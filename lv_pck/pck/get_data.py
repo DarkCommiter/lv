@@ -32,7 +32,7 @@ cookie_dialog_button = wait.until(
     EC.element_to_be_clickable((By.CSS_SELECTOR, ".osano-cm-denyAll"))
 )
 
-# Cliquez sur le bouton pour refuser les cookies
+# Cliquez sur le bouton pour refuser les cookiesf
 cookie_dialog_button.click()
 
 
