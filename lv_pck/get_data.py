@@ -16,7 +16,8 @@ end_time= (start_time + timedelta(days=2))
 start_time_str=start_time.strftime("%m%d%Y")
 end_time_str = end_time.strftime("%m%d%Y")
 # Envoi d'une requête HTTP GET à l'URL
-url = f"https://turo.com/fr/fr/search?country=FR&defaultZoomLevel=7&deliveryLocationType=city&endDate={end_time_str}&endTime=10:00&isMapSearch=false&itemsPerPage=200&latitude=48.8499198&location=%C3%8Ele-de-France,%20France&locationType=CITY&longitude=2.637041100000033&pickupType=ALL&placeId=ChIJF4ymA8Th5UcRcCWLaMOCCwE&region=IDF&sortType=RELEVANCE&startDate={start_time_str}&startTime=00:30&useDefaultMaximumDistance=true"
+url = "https://turo.com/fr/fr/search?country=FR&defaultZoomLevel=7&deliveryLocationType=city&endDate=%s&endTime=10:00&isMapSearch=false&itemsPerPage=200&latitude=48.8499198&location=Île-de-France, France&locationType=CITY&longitude=2.637041100000033&pickupType=ALL&placeId=ChIJF4ymA8Th5UcRcCWLaMOCCwE&region=IDF&sortType=RELEVANCE&startDate=%s&startTime=10:00&useDefaultMaximumDistance=true" % (end_time_str,start_time_str)
+
 last_element_attr = 0
 df = pd.DataFrame()
 # Configuration des options de Selenium pour utiliser Chrome en mode headless
@@ -39,12 +40,18 @@ cookie_dialog_button.click()
 driver.execute_script("document.body.style.zoom='10%'")
 
 time.sleep(13) 
+def open_tab(url):
+    driver.execute_script("window.open('', '_blank');")
+    # Passez au nouvel onglet
+    driver.switch_to.window(driver.window_handles[-1])
+    # Chargez une nouvelle page dans le nouvel onglet
+    driver.get(url)
 
 def extract_car_data(car_div):
     # Extraire les données de chaque voiture
     try:
         title = car_div.find(
-            "div", class_="css-hvsi0k-StyledText").get_text(strip=True)
+            "div", class_="css-19qbs56").get_text(strip=True)
     except AttributeError:
         title = None
 
@@ -96,9 +103,7 @@ def extract_car_data(car_div):
             "p", class_="css-xw8x7t-StyledText").get_text(strip=True)
     except AttributeError:
         newCar = None
-
-
-    return {
+    first_page_data = {
         "title": title,
         "rating": rating,
         "location": location,
@@ -109,6 +114,60 @@ def extract_car_data(car_div):
         "illimted_kilometer": illimKilometer,
         "travels": travel,
     }
+    
+    # On navige vers la seconde page
+    link_elements = driver.find_elements(By.CSS_SELECTOR, 'a[data-testid="vehicle-card-link-box"]')
+
+    # Créez une liste pour stocker les liens correspondants
+    matching_links = []
+    url_detail_list=[]
+    # Parcourez les éléments de lien et extrayez les liens
+    for link_element in link_elements:
+        href = link_element.get_attribute("href")
+        if "fr/fr/location-voiture/france" in href:
+            matching_links.append(href)
+            href_list=str.split(href,"/")
+            car_detail={
+                "city":href_list[7],
+                "brand":href_list[8],
+                "detail":href_list[8],
+                "user_id":href_list[7]
+            }
+            url_detail_list.append(car_detail)
+
+    
+    second_page_list=[]
+    for link in matching_links:
+        open_tab(link)
+        driver.execute_script("document.body.style.zoom='10%'")
+
+        elmt_html_content = driver.page_source
+        elmt_soup = BeautifulSoup(elmt_html_content, "html.parser")
+
+        # click sur le boutton plus pour afficher plus d'informations.
+        wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR,"seo-pages-hz5ix3-Button-ShowHideButton"))).click()
+        
+        info_car_owner = elmt_soup.find("div",class_= lambda value : value and "seo-pages-1hmh62h-StyledLineContainer eysspk24" in value).get_text(strip=True)
+        conso = elmt_soup.find("div",class_= lambda value : value and "seo-pages-1ic17ug e1qbwl5e0" in value).get_text(strip=True)
+        caracteristic = elmt_soup.find("div",attrs={"data-test-id": "first-column"}).get_text(strip=True)
+        stars_detail = elmt_soup.find("div",class_= lambda value : value and "seo-pages-ayxcfu e1ax19fq0" in value).get_text(strip=True)
+        mileage_include= elmt_soup.find("div",class_= lambda value : value and "seo-pages-152f43h-StyledText" in value).get_text(strip=True)
+        cancel= elmt_soup.find("div",class_= lambda value : value and "seo-pages-7fzymt-StyledText" in value).get_text(strip=True)
+
+        second_page_data = {
+        "info_car_owner": info_car_owner,
+        "conso": conso,
+        "caracteristic": caracteristic,
+        "stars_detail": stars_detail,
+        "mileage_include": mileage_include,
+        "cancel": cancel
+        }
+        second_page_list.append(second_page_data)
+        print(second_page_data)
+        # Fermez l'onglet actif
+        driver.close()
+
+    return first_page_data
 
 
 def parse_html_to_df(html_content):
